@@ -7,4 +7,4 @@ print("hello world")
 #additional change for the example
 >>>>>>> hello-world-images
 print("i can code in githubs IDE")
-
+#another change to test pull function

@@ -1,4 +1,8 @@
 #this is an example for a git tutorial
 print("hello world")
+<<<<<<< HEAD
 
 #fixing an imaginary error
+=======
+#additional change for the example
+>>>>>>> hello-world-images

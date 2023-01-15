@@ -3,6 +3,8 @@ My Shopping List application repository.
 This is my first GitHub repository for my first project, a shopping list app written in Python.
 The goal is to create an app that allows me to select several recipes and generate a list of the required ingredients and quantities.
 
+Shopping-List was my first attempt, this uses an excel file to store recipe information.
+
 To use, update the global file-path at the beginning of the code and save as a .py file.
 
 Features:

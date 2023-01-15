@@ -14,7 +14,6 @@ Features:
 
 This is an ongoing project with plenty of scope for additions and improvements.
 Future Aims:
--Utilise a local Access database rather than Excel file
 -Editing of stored recipes
 -Selected recipe names at the top of the shopping list
 -Randomly generated recipe selections

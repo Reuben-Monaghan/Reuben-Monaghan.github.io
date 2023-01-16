@@ -2,12 +2,14 @@ My Shopping List application repository.
 
 This is my GitHub repository for a shopping list app written in Python.
 
-My first version "Shopping-List-python.py" only uses python and uses openpyxl to store recipe information in an excel file.
+My first version "Shopping-List-python.py" is exclusively written in python and uses openpyxl to store recipe information in an excel file.
 "ACCESS DB Shopping-List.py" uses pyodbc to connect with Access and uses SQL quieries to interact with the database.
 The app allows selection of multiple recipes and generates a shopping list of the required ingredients and quantities.
 New recipes can be added and deleted from Excel/Access.
 
-To use, update the global file-path at the beginning of the code.
+To use the excel version, update the global file-path at the beginning of the code and save an excel file as "Recipes.xlsx" in the same file path.
+
+To use the Access version, update the global file-path at the beginning of the code and copy the Access database into the same file path.
 
 Features:
 -Selection of recipes and creation of a shopping list .txt file.

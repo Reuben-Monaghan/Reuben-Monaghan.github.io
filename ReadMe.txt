@@ -9,7 +9,7 @@ New recipes can be added and deleted from Excel/Access.
 
 To use the excel version, update the global file-path at the beginning of the code and save an excel file as "Recipes.xlsx" in the same file path.
 
-To use the Access version, update the global file-path at the beginning of the code and copy the Access database into the same file path.
+To use the Access version, update the global file-path and conn_str at the beginning of the code and copy the Access database into the same file path.
 
 Features:
 -Selection of recipes and creation of a shopping list .txt file.
@@ -18,7 +18,7 @@ Features:
 
 This is an ongoing project with plenty of scope for additions and improvements.
 Future Features:
--Selected recipe names at the top of the shopping list
+-unit testing
 -Editing of stored recipes
 -Randomly generated recipe selections
 -Connection to online recipe databases

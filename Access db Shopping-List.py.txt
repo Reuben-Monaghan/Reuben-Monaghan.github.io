@@ -1,0 +1,508 @@
+import pyodbc
+import datetime
+import os
+import tkinter as tk
+from tkinter import ttk
+global file_path
+
+file_path = ''
+
+# Replace Insert\file\path\here\accessdatabase with your file path and Access database file name
+
+conn_str = (r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};'            
+            r'DBQ=C:\Insert\file\path\here\accessdatabase.accdb;')
+
+# Connect to the database with conn and create a cursor 
+conn = pyodbc.connect(conn_str)
+cursor = conn.cursor()
+
+# Create a recipe class 
+
+class recipe:
+    
+    # instance attributes, takes recipe name the serving size of the recipe and the ingredients dictionary {ingredient:quantity}
+    
+    def __init__(self, name, servings, ingredients):
+        self.name = name
+        self.servings = servings        
+        self.ingredients = ingredients
+        
+        
+    def printname(self):
+        print(self.name)
+                
+    
+def Main_Menu():
+    # Tkinter Main menu
+    # This opens the main menu then calls functions by clicking buttons.
+
+    # Create a list to store the selected recipes
+
+    selected_recipes = []
+
+    #open excel file
+    #sheet1,workbook = open_Recipes_xl()
+
+    # Create the main window
+    menu_window = tk.Tk()
+
+    # Create the frame/format
+    frame = ttk.Frame(menu_window, padding=10)
+    frame.grid()
+
+    # Create a label for the title
+    ttk.Label(frame, text="Shopping List Menu").grid(column=1, row=0)
+
+    # Create a button to add a Add Recipe 
+    ttk.Button(frame, text="Add Recipe", command=lambda:[add_recipe(menu_window)]).grid(column=0, row=1)
+
+    # Create a button to Edit Recipe
+    ttk.Button(frame, text="Edit Recipe", command=menu_window.destroy).grid(column=0, row=2)
+
+    # Create a button to Delete Recipe
+    ttk.Button(frame, text="Delete Recipe", command=lambda:[delete_recipes_button(menu_window)]).grid(column=0, row=3)
+
+    # Create a button to Create Shopping List
+    ttk.Button(frame, text="Create Shopping List", command=lambda:[Create_Shopping_List(menu_window)]).grid(column=3, row=1)
+
+    # Create a button to quit
+    ttk.Button(frame, text="Quit", command=menu_window.destroy).grid(column=1, row=4)
+
+    menu_window.mainloop()
+    
+    
+
+def check_for_duplicates(new_recipe_name, i, nameslist):
+    
+    # Uses recursion to check for duplicate recipe names, if a duplicate is found add _1 then check again,
+    # if another duplicate is found add _2...
+    
+    i=1
+    name_len= len(new_recipe_name)
+    
+    while True:
+        i+=1
+        if new_recipe_name in nameslist:
+            if i>1:
+                new_recipe_name = new_recipe_name[0:name_len] + f"_{i}"
+        else:
+            return new_recipe_name
+            break
+            
+            
+def insert_recipe(new_recipe):
+    # Inserts a new recipe into the Access database and returns the new recipe-ID
+    # First create a list of recipe names called nameslist
+    # Then checks for duplicates, if a duplicate add "_1" to the recipe name and check again
+    # Once the recipe name is unique, inset into Recipe-Names and return the new recipe-ID
+    
+    recipe_id =[]
+    nameslist = []
+    for i in cursor.execute(f"SELECT [Recipe-Names]\
+                FROM Recipes;"):
+        nameslist.append(i[0])
+    
+    
+    new_recipe_name = check_for_duplicates(new_recipe.name,1,nameslist)
+    
+    cursor.execute(f"INSERT INTO Recipes ([Recipe-Names])\
+            VALUES ('{new_recipe_name}');")
+    conn.commit()
+    
+       
+    
+    cursor.execute(f"SELECT [Recipe-ID]\
+                                FROM Recipes\
+                                WHERE [Recipe-Names]='{new_recipe_name}';")
+     
+    recipe_id = cursor.fetchall()
+    
+    
+    return recipe_id
+
+
+
+def create_ingredient_dict():
+    #Creates a dictionary containing Key = Ingredient-ID and Value = Ingredient-Names from the Ingredients table
+    # This can then be used to determine if an ingredient is already recorded in the database and whats its Ingredient-ID is
+    
+    ingredient_dict = {}
+
+    for i in cursor.execute(f"SELECT Ingredients.[Ingredient-ID],Ingredients.[Ingredient-Names]\
+    FROM Ingredients;"):
+        ingredient_dict[f"{i[0]}"] = f"{i[1]}"
+    
+    return ingredient_dict
+
+
+
+def create_new_ingredient_ids(new_recipe):
+    #Create a list of Ingredient-IDs for the new recipe and returns them >>> This will then be added to the Recipe-Ingredient table
+    #if the ingredient is in the Ingredients table get the Ingredient-ID 
+    #if the ingredient is not in the Ingredients table insert into Ingredients table, then get the Ingredient-ID
+    
+    new_recipe_ing_ids = []
+    ingredient_dict = create_ingredient_dict()
+    for i in new_recipe.ingredients:
+        if i[0] in ingredient_dict.values():
+
+            for ingid,ing in ingredient_dict.items():
+
+                if ing == i[0]:
+
+
+                    new_recipe_ing_ids.append(ingid)
+
+        else:
+            cursor.execute(f"INSERT INTO Ingredients ([Ingredient-Names],[Measurement])\
+            VALUES ('{i[0]}','{i[2]}');")
+
+            conn.commit()
+
+            ingid = cursor.execute(f"SELECT [Ingredient-ID]\
+                                    FROM Ingredients\
+                                    WHERE [Ingredient-Names]='{i[0]}';")
+            ingred_id=ingid.fetchall()[0][0]
+            new_recipe_ing_ids.append(ingred_id)
+    return new_recipe_ing_ids
+
+
+
+def get_ingredients(selected_recipes):
+    # creates a ings_id_list of tuples containing (ingredient-ID,Quantity) 
+    # then creates a quant_list of tuples containing (ingredient-ID,SUM(Quantity)) 
+    # then creates an ingredient_names_list from the ingredient-IDs in set(quant_list)
+    # the combines quant_list and ingredient_names_list to create I_Q_list
+    
+    ings_id_list = []
+    for i in range(len(selected_recipes)):
+
+        for k in cursor.execute(f"SELECT [Ingredient-ID],[Quantity] FROM [Recipe-Ingredient] WHERE [Recipe-ID]={selected_recipes[i][1]};"):
+            ings_id_list.append((k[0],k[1]))
+
+
+    quant_list = []
+    for i in ings_id_list:
+        cursor.execute(f"SELECT SUM([Quantity]) FROM [Recipe-Ingredient] WHERE [Ingredient-ID]={i[0]};")
+        quant_list.append((i[0],int(cursor.fetchall()[0][0])))
+        
+    a = list(set(quant_list))
+    ingredient_names_list = []
+    for i in range(len(a)):
+        for k in cursor.execute(f"SELECT [Ingredient-ID],[Ingredient-Names],[Measurement] FROM [Ingredients] WHERE [Ingredient-ID]={int(a[i][0])};"):
+                    ingredient_names_list.append(k)
+    ingredient_names_list
+    
+    I_Q_list = []
+    for i in range(len(a)):
+        I_Q_list.append((ingredient_names_list[i][1],a[i][1],ingredient_names_list[i][2]))
+        
+    return I_Q_list
+
+
+
+def recipe_list():
+    
+    recipes = []    
+    
+    for i in cursor.execute(f"SELECT [Recipes].[Recipe-Names], [Recipes].[Recipe-ID]\
+    FROM [Recipes];"):
+        recipes.append(i)
+    return recipes
+
+
+
+def delete_recipes(selected_recipes):
+    
+    #this deletes rows using the recipe-IDs in the selected_recipes list
+    #open the workbook and deletes the rows from [Recipes] and [Recipe-Ingredient] tables if the [Recipe-ID] matches
+    
+    
+    
+    for i in selected_recipes:
+        
+       
+        cursor.execute(f"DELETE FROM [Recipes] WHERE [Recipes].[Recipe-ID]={int(i[1])};")
+        cursor.execute(f"DELETE FROM [Recipe-Ingredient] WHERE [Recipe-Ingredient].[Recipe-ID]={int(i[1])};")
+        conn.commit()    
+    
+
+
+def delete_recipes_button(menu_window):
+    
+    global selected_recipes
+    selected_recipes = []
+    
+    # Close the menu window
+    menu_window.destroy()
+    
+    # Create Select recipes window
+    delete_recipes_window = tk.Tk()
+    
+    # Create a list of recipes
+    # Open the excel document (open_Recipes_xl()) <- this is in the recipe_list() function. and create a recipe list using
+    # recipe_list()
+    recipes=[]
+    recipes = recipe_list()
+    
+    # Create a list of tkinter variables for the checkboxes
+    checkboxes = []
+    for recipe in recipes:
+        var = tk.IntVar()
+        checkboxes.append(var)
+    
+    # Create the checkboxes and "Submit" button
+    for i, recipe in enumerate(recipes):
+        tk.Checkbutton(delete_recipes_window, text=recipe[0], variable=checkboxes[i]).pack()
+
+    # Create a "Submit" button
+    submit_button = tk.Button(delete_recipes_window, text='Submit', command=lambda:[submit(recipes,checkboxes),delete_recipes(selected_recipes),delete_recipes_window.destroy(),Main_Menu()])
+    submit_button.pack()
+
+    
+    # Run the main loop
+    delete_recipes_window.mainloop()
+    
+    
+    
+def submit(recipes,checkboxes):
+    # A function to be called when the "Submit" button is clicked
+    # Create a new list to store the selected recipes
+    
+    
+    selected = []
+    for i, recipe in enumerate(recipes):
+        
+                
+        if checkboxes[i].get() == 1:
+            selected.append(recipe)
+    
+        # Assign the selected recipes to the global variable
+    global selected_recipes
+    selected_recipes = selected
+    return selected_recipes
+
+def Create_Shopping_List(menu_window):
+    #Called when the "Create shopping list" button is clicked from the main menu
+    
+    # Close the menu window
+    menu_window.destroy()
+    
+    # Create Select recipes window
+    select_recipes_window = tk.Tk()
+    
+    # Create recipe list    
+    
+    recipes = recipe_list()
+    
+    # Create a list of tkinter variables for the checkboxes
+    checkboxes = []
+    for recipe in recipes:
+        var = tk.IntVar()
+        checkboxes.append(var)
+    
+    # Create the checkboxes and "Submit" button
+    for i, recipe in enumerate(recipes):
+        tk.Checkbutton(select_recipes_window, text=recipe[0], variable=checkboxes[i]).pack()
+
+    # Create a "Submit" button
+    submit_button = tk.Button(select_recipes_window, text='Submit', command=lambda:[submit(recipes,checkboxes),select_recipes_window.destroy(),Main_Menu()])
+    submit_button.pack()
+
+
+    # Run the main loop
+    select_recipes_window.mainloop()
+    
+    # get the ingredients before writing them too the shopping list
+    
+    A = get_ingredients(selected_recipes)
+    write_shopping_list(A)
+    return selected_recipes
+
+
+def write_shopping_list(ingredient_list):
+    
+    os.chdir(file_path)
+    now = datetime.datetime.now()
+    
+    date_string = now.strftime('%d-%m-%Y')
+    
+    # Open the file in write mode
+    with open(f'Shopping list - {date_string}.txt', 'w') as f:
+        
+        # Write each item to the file as a line
+        for i,q,m in ingredient_list:
+            f.writelines(i + ' ' + str(q) + ' ' + m + '\n')
+
+    # The file is automatically closed when the block ends
+    
+    
+
+def add_recipe(menu_window):
+    #Called when the "Add recipe" button is clicked from the main menu
+    
+    
+    global recipe_name
+    recipe_name = ''
+    global servings
+    servings = ''
+    global ingredients
+    ingredients = []
+    global ingredient_num
+    ingredient_num = 0
+    
+    global I
+    global Q
+    global M
+    I = ''
+    Q = ''
+    M = ''
+    
+    # Initialize the widget_y variable with the y position of the first set of widgets
+    global widget_y
+    widget_y = 100
+    
+    # Close the menu window
+    menu_window.destroy()
+    
+    # Create add recipe window
+    add_recipe_window = tk.Tk()
+    
+     # Create the frame to hold the canvas and the scrollbar
+    frame = tk.Frame(add_recipe_window)
+    frame.pack()
+
+    
+    # Create the canvas widget and the scrollbar
+    canvas = tk.Canvas(add_recipe_window, height = 800, width = 770 )
+    canvas.pack(side = "left")
+    scrollbar = ttk.Scrollbar(add_recipe_window, orient="vertical", command=canvas.yview)
+    scrollbar.pack(side="right", fill="y")
+    canvas['yscrollcommand'] = scrollbar.set
+    
+       
+    
+    # Create a label for the title
+    ttk.Label(add_recipe_window, text="Add New Recipe")
+    
+    #Create recipe name label and entry box
+    recipe_name_label = ttk.Label(add_recipe_window, text="Recipe Name:")
+    recipe_name_input_box = tk.Entry(add_recipe_window,textvariable=recipe_name )
+    
+    #Create number of servings label and entry box
+    Number_of_servings_label = ttk.Label(add_recipe_window, text="Number of servings:")
+    Number_of_servings_input_box = tk.Entry(add_recipe_window)
+    
+    
+    # labels and entry boxes
+    Ingredient_label = ttk.Label(add_recipe_window, text="Ingredient:")
+    Ingredient_input_box = tk.Entry(add_recipe_window,textvariable=I )
+    
+    Quantity_label = ttk.Label(add_recipe_window, text="Quantity:")
+    Quantity_input_box = tk.Entry(add_recipe_window)
+    
+    Measurement_label = ttk.Label(add_recipe_window, text="Measurement:")
+    Measurement_input_box = tk.Entry(add_recipe_window, textvariable='measurement')
+
+    # locations of labels and entry boxes
+    canvas.create_window((50, 30), window=recipe_name_label)
+    canvas.create_window((200, 30), window=recipe_name_input_box)
+    canvas.create_window((69, 60), window=Number_of_servings_label)
+    canvas.create_window((200, 60), window=Number_of_servings_input_box)    
+    canvas.create_window((50, 100), window=Ingredient_label)
+    canvas.create_window((150, 100), window=Ingredient_input_box)
+    canvas.create_window((255, 100), window=Quantity_label)
+    canvas.create_window((350, 100), window=Quantity_input_box)
+    canvas.create_window((490, 100), window=Measurement_label)
+    canvas.create_window((600, 100), window=Measurement_input_box)
+    
+    
+    # Create a button to Add Recipe
+    
+    
+    ttk.Button(add_recipe_window, text="Add Recipe", command=lambda:[add_recipe_button_command(ingredients),
+                                                                     add_recipe_window.destroy(),
+                                                                     Main_Menu()]).place(x=650, y=750)
+    
+    # Create a button to cancel
+    ttk.Button(add_recipe_window, text="Cancel", command=lambda:[add_recipe_window.destroy(),Main_Menu()]).place(x=50, y=750)
+    
+    
+    
+    
+    # This function creates new widgets and adds them below the previous ones (this is so i can add multiple new ingredients)
+    def add_ingredient_widgets(I,Q,M):
+        #global added_ingredient_label
+        global widget_y
+        global ingredient_num
+
+        widget_y += 30
+        ingredient_num +=1
+
+        ingredient_num_label = ttk.Label(add_recipe_window, text=f"{ingredient_num}:")
+        
+        added_ingredient_label = ttk.Label(add_recipe_window, text=f"Ingredient: {I}\t  Quantity: {Q} \t Measurement: {M}")
+        
+        # Create the windows inside the canvas and position them using widget_y
+        canvas.create_window((160, widget_y), window=ingredient_num_label)
+        canvas.create_window((160, widget_y), window=added_ingredient_label)
+                
+        
+
+    add_ingredient_button = ttk.Button(add_recipe_window, text="Add Ingredient", command=lambda:[add_ingredient_button_command()
+                                                                                                 ,add_ingredient_widgets(I,Q,M)])
+
+    # Create the button inside the canvas and position it
+    canvas.create_window((725, 100), window=add_ingredient_button)
+    
+
+
+    def add_ingredient_button_command():
+        
+        # This will use .get() to take the information in the add igredient entry boxes and store it in a list
+        global I
+        global Q
+        global M
+        global ingredients
+        
+        I = Ingredient_input_box.get()
+        Q = Quantity_input_box.get()
+        M = Measurement_input_box.get()
+        
+        ingredients.append([I.lower(),Q.lower(),M.lower()])
+        
+        # this deletes the contents of the entry boxes
+        Ingredient_input_box.delete(0, tk.END)
+        Quantity_input_box.delete(0, tk.END)
+        Measurement_input_box.delete(0, tk.END)
+        
+        return I,Q,M
+    
+    def add_recipe_button_command(ingredients):
+        global recipe_name
+        global servings
+        
+        recipe_name = recipe_name_input_box.get()
+        servings = Number_of_servings_input_box.get()
+        
+        print(servings)
+       
+        new_recipe = recipe(recipe_name,servings,ingredients)
+        
+        # This create/collects the recipe-id and ingredient-ids then adds them to the correct table
+        # insert_recipe() - creates a recipe-id (recipe name is updated if there are duplicates)
+        # create_new_ingredient_ids() - creates a list ingredient-ids (new ids for new ingredients)
+
+        new_recipe_id = insert_recipe(new_recipe)
+        new_ingredient_ids = create_new_ingredient_ids(new_recipe)
+
+        for ing_id in new_ingredient_ids:
+            cursor.execute(f"INSERT INTO [Recipe-Ingredient] ([Recipe-ID],[Ingredient-ID],[Quantity])\
+                    VALUES ('{int(new_recipe_id[0][0])}','{int(ing_id)}','{new_recipe.ingredients[new_ingredient_ids.index(ing_id)][1]}');")
+            conn.commit()
+        return new_recipe
+
+
+# Call Main_Menu() to start the programe.
+
+Main_Menu()
